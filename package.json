@@ -1,8 +1,14 @@
 {
   "name": "switch-challenge",
+  "private": true,
   "version": "1.0.0",
+  "type": "module",
   "description": "A professional spatial reasoning assessment tool designed to test logic and working memory through permutation puzzles.",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
+    "dev": "vite",
     "start": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview"
