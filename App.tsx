@@ -5,6 +5,7 @@ import { LEVELS } from './constants';
 import { generatePuzzle, formatTime } from './services/gameLogic';
 import { AppMode, PracticeType, Puzzle, Layer, HistoryRecord } from './types';
 
+// Main application component for Switch Challenge
 export default function SwitchChallengeApp() {
   // App Mode
   const [appMode, setAppMode] = useState<AppMode>('HOME'); 
