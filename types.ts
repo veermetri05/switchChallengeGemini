@@ -40,5 +40,5 @@ export interface HistoryRecord {
   puzzleSnapshot: Puzzle;
 }
 
-export type AppMode = 'HOME' | 'ASSESSMENT' | 'PRACTICE_CONFIG' | 'PRACTICE_PLAY' | 'FINISHED';
+export type AppMode = 'HOME' | 'ASSESSMENT_SETUP' | 'ASSESSMENT' | 'PRACTICE_CONFIG' | 'PRACTICE_PLAY' | 'FINISHED';
 export type PracticeType = 'PROGRESSIVE' | 'LEVEL' | 'RANDOM';

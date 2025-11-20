@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Play, Activity, CheckCircle, XCircle, Settings, ArrowLeft, Eye, Shuffle } from 'lucide-react';
+import { Play, Activity, CheckCircle, XCircle, Settings, ArrowLeft, Eye, Shuffle, Timer, Zap } from 'lucide-react';
 import { ShapeRow, OperatorBox, Arrow } from './components/GameComponents';
 import { LEVELS } from './constants';
 import { generatePuzzle, formatTime } from './services/gameLogic';
@@ -21,6 +21,10 @@ export default function SwitchChallengeApp() {
   const [history, setHistory] = useState<HistoryRecord[]>([]);
   const [timeLeft, setTimeLeft] = useState(300); 
   const [isRandomPhase, setIsRandomPhase] = useState(false);
+  
+  // Speed Mode State
+  const [isSpeedMode, setIsSpeedMode] = useState(false);
+  const [questionTimeLeft, setQuestionTimeLeft] = useState(10);
 
   // Puzzle State
   const [puzzle, setPuzzle] = useState<Puzzle | null>(null);
@@ -54,7 +58,7 @@ export default function SwitchChallengeApp() {
 
   // --- ACTIONS ---
 
-  const startAssessment = () => {
+  const startAssessment = (speedMode: boolean) => {
     setScore(0);
     setRound(1);
     setCurrentLevelIdx(0);
@@ -63,6 +67,8 @@ export default function SwitchChallengeApp() {
     setPuzzle(generatePuzzle(0));
     setMysterySolvedCount(0);
     setReviewIndex(-1);
+    setIsSpeedMode(speedMode);
+    setQuestionTimeLeft(10);
     setAppMode('ASSESSMENT');
   };
 
@@ -86,6 +92,7 @@ export default function SwitchChallengeApp() {
     setMysterySolvedCount(0);
     setPracticeResult(null); 
     setReviewIndex(-1); 
+    setQuestionTimeLeft(10); // Reset speed timer
   }, []);
 
   const saveHistory = (isSuccess: boolean, finalLayers: Layer[]) => {
@@ -124,6 +131,9 @@ export default function SwitchChallengeApp() {
   const handleAnswer = (selectedCode: number[], layerIndex: number) => {
     if (!puzzle) return;
     if (reviewIndex !== -1 || (appMode === 'PRACTICE_PLAY' && practiceResult !== null)) return;
+    
+    // Prevent interaction if time is out in speed mode
+    if (appMode === 'ASSESSMENT' && isSpeedMode && questionTimeLeft <= 0) return;
 
     const layer = puzzle.layers[layerIndex];
     const isCorrect = selectedCode.join('') === layer.code.join('');
@@ -193,11 +203,8 @@ export default function SwitchChallengeApp() {
       }
     } else if (practiceType === 'RANDOM') {
       if (isRandomPhase) {
-         // In random phase, we just grab another random one regardless of pass/fail
-         // (Or we could force retry, but random flow usually implies moving on)
          nextLevelIdx = getWeightedRandomLevel();
       } else {
-         // In progressive phase of random mode
          if (lastResult && lastResult.correct && currentLevelIdx < LEVELS.length - 1) {
              nextLevelIdx = currentLevelIdx + 1;
          }
@@ -214,8 +221,15 @@ export default function SwitchChallengeApp() {
     }
   };
 
+  const handleQuestionTimeout = () => {
+    if (!puzzle) return;
+    // Mark as incorrect and move on
+    finishQuestion(false, puzzle.layers);
+  };
+
   // --- EFFECTS ---
 
+  // Global Timer for Assessment
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>;
     if (appMode === 'ASSESSMENT') {
@@ -232,6 +246,27 @@ export default function SwitchChallengeApp() {
     }
     return () => clearInterval(timer);
   }, [appMode]);
+
+  // Speed Mode Timer (10s per question)
+  useEffect(() => {
+    if (appMode === 'ASSESSMENT' && isSpeedMode) {
+        const timer = setInterval(() => {
+           setQuestionTimeLeft(prev => {
+              if (prev <= 0) return 0;
+              return prev - 1;
+           });
+        }, 1000);
+        return () => clearInterval(timer);
+    }
+  }, [appMode, isSpeedMode, round]);
+
+  // Speed Mode Trigger
+  useEffect(() => {
+     if (appMode === 'ASSESSMENT' && isSpeedMode && questionTimeLeft === 0) {
+        handleQuestionTimeout();
+     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questionTimeLeft, appMode, isSpeedMode]);
 
 
   // --- RENDERERS ---
@@ -292,7 +327,7 @@ export default function SwitchChallengeApp() {
           
           <div className="space-y-4">
             <button 
-              onClick={startAssessment}
+              onClick={() => setAppMode('ASSESSMENT_SETUP')}
               className="w-full bg-slate-900 hover:bg-slate-800 text-white p-4 rounded-xl shadow-lg flex items-center justify-between group transition-transform active:scale-95"
             >
               <div className="text-left">
@@ -312,6 +347,68 @@ export default function SwitchChallengeApp() {
               </div>
               <Settings className="w-6 h-6 text-slate-300 group-hover:text-indigo-500" />
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (appMode === 'ASSESSMENT_SETUP') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans text-slate-800">
+        <div className="bg-white max-w-md w-full p-8 rounded-2xl shadow-xl">
+          <button onClick={() => setAppMode('HOME')} className="mb-4 text-slate-400 hover:text-slate-700 flex items-center gap-1 text-sm font-bold">
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+          <h2 className="text-2xl font-bold mb-6">Assessment Settings</h2>
+          
+          <div className="space-y-4">
+            <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="bg-white p-2 rounded-lg text-indigo-600">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-indigo-900">Standard Mode</h3>
+                  <p className="text-xs text-indigo-700">Classic simulation experience.</p>
+                </div>
+              </div>
+              <ul className="text-xs text-indigo-800 space-y-1 pl-11 opacity-80 list-disc">
+                <li>5 Minutes Total Time</li>
+                <li>24 Rounds</li>
+                <li>No time limit per question</li>
+              </ul>
+              <button 
+                onClick={() => startAssessment(false)}
+                className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition-all shadow-md"
+              >
+                Start Standard
+              </button>
+            </div>
+
+            <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="bg-white p-2 rounded-lg text-orange-600">
+                  <Zap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-orange-900">Speed Mode</h3>
+                  <p className="text-xs text-orange-700">High pressure training.</p>
+                </div>
+              </div>
+              <ul className="text-xs text-orange-800 space-y-1 pl-11 opacity-80 list-disc">
+                <li>5 Minutes Total Time</li>
+                <li>24 Rounds</li>
+                <li className="font-bold">10 Seconds per question</li>
+                <li>Unanswered questions are skipped & failed</li>
+              </ul>
+              <button 
+                onClick={() => startAssessment(true)}
+                className="w-full mt-4 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-lg transition-all shadow-md"
+              >
+                Start Speed Mode
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -479,8 +576,9 @@ export default function SwitchChallengeApp() {
              <ArrowLeft className="w-4 h-4" />
            </button>
            <div>
-             <span className="text-[10px] font-bold text-slate-400 uppercase block">
+             <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
                 {appMode === 'FINISHED' ? 'Review' : (isPractice ? 'Practice' : 'Assessment')}
+                {isSpeedMode && appMode === 'ASSESSMENT' && <Zap className="w-3 h-3 text-orange-500 fill-orange-500" />}
              </span>
              <span className="font-bold text-sm leading-none flex items-center gap-1">
                Q{isReviewing && history[reviewIndex] ? history[reviewIndex].round : round}
@@ -491,12 +589,22 @@ export default function SwitchChallengeApp() {
          </div>
 
          {/* Right: Timer (Assessment) or Score (Practice) */}
-         <div className="text-right">
+         <div className="text-right flex flex-col items-end">
            {appMode === 'ASSESSMENT' ? (
-              <>
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Time Left</span>
-                <span className={`font-mono font-bold text-lg ${timeLeft < 30 ? 'text-red-500 animate-pulse' : 'text-slate-800'}`}>{formatTime(timeLeft)}</span>
-              </>
+              <div className="flex gap-4">
+                {isSpeedMode && (
+                   <div className="text-right">
+                      <span className="text-[10px] font-bold text-orange-500 uppercase block">Limit</span>
+                      <span className={`font-mono font-bold text-lg ${questionTimeLeft <= 3 ? 'text-red-600 animate-pulse' : 'text-orange-600'}`}>
+                        {questionTimeLeft}s
+                      </span>
+                   </div>
+                )}
+                <div className="text-right">
+                   <span className="text-[10px] font-bold text-slate-400 uppercase block">Total</span>
+                   <span className={`font-mono font-bold text-lg ${timeLeft < 30 ? 'text-red-500 animate-pulse' : 'text-slate-800'}`}>{formatTime(timeLeft)}</span>
+                </div>
+              </div>
            ) : (
               <>
                 <span className="text-[10px] font-bold text-slate-400 uppercase block">Score</span>
